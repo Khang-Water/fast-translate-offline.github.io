@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App Dịch Giọng Nói Offline — Báo cáo dự án</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===========================================
+   THEME — Instrument Console (dark-tech)
+   Đổi màu/ font toàn deck ở đây.
+   =========================================== */
+:root{
+  --stage-bg:#06080c;        /* nền ngoài stage */
+  --slide-bg:#0a0c10;        /* nền slide */
+  --panel:#10141b;           /* nền panel/card */
+  --panel-2:#141923;         /* panel nhạt hơn */
+  --line:#222a36;            /* đường kẻ grid/viền */
+  --line-2:#2e3947;
+  --amber:#f0a830;           /* accent chính */
+  --cyan:#3fd0c9;            /* accent phụ */
+  --txt:#eef2f6;             /* chữ chính */
+  --dim:#8a97a6;             /* chữ phụ */
+  --dim-2:#5f6b78;
+  --red:#ef5350; --green:#5fce7e; --warnC:#f0a830;
+  --font-display:'IBM Plex Sans',sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+
+/* ===========================================
+   FIXED 16:9 STAGE — viewport-base.css (full)
+   =========================================== */
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--stage-bg);}
+.deck-viewport{position:fixed;inset:0;overflow:hidden;background:var(--stage-bg);}
+.deck-stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;transform-origin:0 0;background:var(--slide-bg);}
+.slide{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;display:block;visibility:hidden;opacity:0;pointer-events:none;background:var(--slide-bg);}
+.slide.active,.slide.visible{visibility:visible;opacity:1;pointer-events:auto;z-index:1;}
+img,video,canvas,svg{max-width:100%;max-height:100%;}
+.deck-controls{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1000;}
+@media print{
+  html,body{width:1920px;height:auto;overflow:visible;background:#fff;}
+  .deck-viewport{position:static;overflow:visible;background:#fff;}
+  .deck-stage{position:static;width:auto;height:auto;transform:none !important;background:none;}
+  .slide{position:relative;display:block !important;visibility:visible !important;opacity:1 !important;pointer-events:auto !important;width:1920px;height:1080px;break-after:page;page-break-after:always;}
+  .slide:last-child{break-after:auto;page-break-after:auto;}
+  .deck-controls{display:none !important;}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.2s !important;}
+}
+
+/* ===========================================
+   SLIDE CHROME — khung đo + góc ngắm chung
+   =========================================== */
+.slide{font-family:var(--font-display);color:var(--txt);}
+.slide .grid-bg{position:absolute;inset:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:48px 48px;opacity:.15;pointer-events:none;}
+.slide .frame{position:absolute;inset:54px;border:1px solid var(--line);pointer-events:none;}
+.corner{position:absolute;width:20px;height:20px;border:2px solid var(--amber);z-index:4;pointer-events:none;}
+.corner.tl{top:44px;left:44px;border-right:0;border-bottom:0}
+.corner.tr{top:44px;right:44px;border-left:0;border-bottom:0}
+.corner.bl{bottom:44px;left:44px;border-right:0;border-top:0}
+.corner.br{bottom:44px;right:44px;border-left:0;border-top:0}
+.pad{position:absolute;inset:54px;padding:64px 88px;display:flex;flex-direction:column;z-index:3;}
+
+/* header bar mỗi content slide */
+.hdr{display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);color:var(--dim);font-size:22px;letter-spacing:2px;margin-bottom:30px;flex:0 0 auto;}
+.hdr .tag{color:var(--amber);}
+.hdr .nums{color:var(--dim-2);}
+.slide h2{font-size:60px;font-weight:700;letter-spacing:-1px;line-height:1.05;margin-bottom:8px;flex:0 0 auto;}
+.slide h2 .a{color:var(--amber);}
+.lead{font-size:30px;color:var(--dim);line-height:1.4;margin-bottom:28px;flex:0 0 auto;max-width:1500px;}
+.body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;}
+
+/* mono accents */
+.k-amber{color:var(--amber)} .k-cyan{color:var(--cyan)}
+.good{color:var(--green)} .warnc{color:var(--amber)} .bad{color:var(--red)}
+code,.mono{font-family:var(--font-mono);}
+.inline-code{font-family:var(--font-mono);background:var(--panel-2);border:1px solid var(--line);padding:2px 10px;border-radius:4px;font-size:.92em;color:var(--cyan);}
+
+/* ===========================================
+   TABLES — reading-first
+   =========================================== */
+table{width:100%;border-collapse:collapse;font-size:25px;}
+table.sm{font-size:23px;}
+th,td{text-align:left;padding:13px 20px;border-bottom:1px solid var(--line);}
+th{font-family:var(--font-mono);color:var(--amber);font-weight:500;font-size:.82em;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--line-2);}
+td.num,th.num{text-align:right;font-family:var(--font-mono);}
+tr:last-child td{border-bottom:0;}
+tbody tr{transition:background .2s;}
+.t-wrap{border:1px solid var(--line);background:var(--panel);}
+
+/* cards / gauges */
+.cards{display:flex;gap:24px;}
+.card{flex:1;border:1px solid var(--line);background:var(--panel);padding:28px 30px;display:flex;flex-direction:column;gap:10px;}
+.card .lbl{font-family:var(--font-mono);font-size:21px;color:var(--dim);letter-spacing:1px;}
+.card .val{font-family:var(--font-mono);font-size:46px;font-weight:600;line-height:1;}
+.card .note{font-size:20px;color:var(--dim-2);}
+.card.accent{border-left:3px solid var(--amber);}
+
+/* bullet list */
+ul.bul{list-style:none;display:flex;flex-direction:column;gap:18px;}
+ul.bul li{position:relative;padding-left:42px;font-size:29px;line-height:1.4;color:var(--txt);}
+ul.bul li::before{content:"▸";position:absolute;left:8px;color:var(--amber);font-size:.9em;}
+ul.bul.tight li{font-size:26px;gap:12px;}
+ol.steps{list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:16px;}
+ol.steps li{position:relative;padding-left:64px;font-size:27px;line-height:1.38;}
+ol.steps li::before{counter-increment:s;content:counter(s,decimal-leading-zero);position:absolute;left:0;top:0;font-family:var(--font-mono);color:var(--amber);font-size:24px;border:1px solid var(--line-2);width:42px;height:42px;display:grid;place-items:center;}
+
+/* two-column */
+.two{display:flex;gap:36px;}
+.two>div{flex:1;min-width:0;}
+.col-h{font-family:var(--font-mono);color:var(--cyan);font-size:23px;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;}
+
+/* flow diagram (workflow) */
+.flow{display:flex;flex-direction:column;gap:11px;font-family:var(--font-mono);font-size:24px;}
+.flow .node{border:1px solid var(--line);background:var(--panel);padding:14px 24px;display:flex;align-items:center;gap:18px;}
+.flow .node .desc{color:var(--dim);font-size:.8em;margin-left:auto;}
+.flow .node.hl{border-left:3px solid var(--cyan);}
+.flow .arrow{color:var(--amber);text-align:center;font-size:20px;line-height:.6;}
+
+/* pipeline horizontal */
+.pipe{display:flex;align-items:stretch;gap:0;font-family:var(--font-mono);}
+.pipe .stage{flex:1;border:1px solid var(--line);background:var(--panel);padding:20px 14px;text-align:center;font-size:21px;position:relative;}
+.pipe .stage .ic{font-size:30px;color:var(--cyan);margin-bottom:8px;display:block;}
+.pipe .sep{display:flex;align-items:center;color:var(--amber);font-size:30px;padding:0 6px;}
+
+/* callout */
+.callout{border:1px solid var(--line-2);border-left:3px solid var(--amber);background:linear-gradient(90deg,rgba(240,168,48,.07),transparent);padding:24px 30px;font-size:27px;line-height:1.45;}
+.callout.cyan{border-left-color:var(--cyan);background:linear-gradient(90deg,rgba(63,208,201,.07),transparent);}
+.callout.red{border-left-color:var(--red);background:linear-gradient(90deg,rgba(239,83,80,.08),transparent);}
+
+/* big statement */
+.statement{font-size:62px;font-weight:700;line-height:1.12;letter-spacing:-1px;}
+.statement .a{color:var(--amber);}
+
+/* ===========================================
+   TIMELINE spine (slide 24)
+   =========================================== */
+.tl{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding-top:20px;}
+.tl-spine{position:absolute;top:18px;left:3%;right:3%;height:2px;background:linear-gradient(90deg,var(--line-2),var(--amber),var(--cyan));z-index:0;}
+.tl-col{position:relative;z-index:1;display:flex;flex-direction:column;}
+.tl-node{display:flex;align-items:center;gap:10px;margin-bottom:22px;height:auto;flex-wrap:wrap;}
+.tl-node>*{position:relative;z-index:1;}
+.tl-dot{width:16px;height:16px;border-radius:50%;background:var(--slide-bg);border:3px solid var(--amber);box-shadow:0 0 0 5px var(--slide-bg),0 0 16px rgba(240,168,48,.6);flex:0 0 auto;}
+.tl-dot.last{border-color:var(--cyan);box-shadow:0 0 0 5px var(--slide-bg),0 0 16px rgba(63,208,201,.7);}
+.tl-wk{font-family:var(--font-mono);font-size:30px;font-weight:700;color:var(--amber);background:var(--slide-bg);padding:0 6px;}
+.tl-date{font-family:var(--font-mono);font-size:17px;color:var(--dim);background:var(--slide-bg);padding:0 5px;}
+.tl-cm{font-family:var(--font-mono);font-size:15px;color:var(--cyan);border:1px solid var(--line-2);border-radius:20px;padding:2px 10px;margin-left:auto;background:var(--slide-bg);}
+.tl-card{border:1px solid var(--line);background:var(--panel);padding:20px 20px;flex:1;border-top:2px solid var(--line-2);transition:transform .3s var(--ease),border-color .3s;display:flex;flex-direction:column;}
+.tl-card.hot{border-top-color:var(--cyan);background:linear-gradient(180deg,rgba(63,208,201,.06),var(--panel));}
+.slide.visible .tl-card:hover{transform:translateY(-6px);border-top-color:var(--amber);}
+.tl-title{font-size:23px;font-weight:600;line-height:1.2;margin-bottom:12px;color:var(--txt);}
+.tl-body{font-size:18px;line-height:1.4;color:var(--dim);margin-bottom:13px;}
+.tl-hard{font-size:17px;line-height:1.4;color:#d9b48a;background:rgba(240,168,48,.06);border-left:2px solid var(--amber);padding:9px 11px;margin-bottom:13px;}
+.tl-hard .hl-lbl{font-family:var(--font-mono);color:var(--amber);font-weight:600;font-size:.92em;}
+.tl-hard .inline-code{font-size:.8em;padding:1px 6px;}
+.tl-why{font-family:var(--font-mono);font-size:18px;line-height:1.32;color:var(--cyan);border-top:1px solid var(--line);padding-top:11px;margin-top:auto;}
+
+/* ===========================================
+   SECTION DIVIDER slides
+   =========================================== */
+.divider{display:flex;flex-direction:column;justify-content:center;}
+.divider .sec-no{font-family:var(--font-mono);font-size:200px;font-weight:700;color:var(--panel-2);line-height:.8;letter-spacing:-6px;position:absolute;right:120px;top:120px;-webkit-text-stroke:2px var(--line-2);}
+.divider .kick{font-family:var(--font-mono);color:var(--amber);letter-spacing:8px;font-size:28px;text-transform:uppercase;margin-bottom:30px;}
+.divider h1{font-size:120px;font-weight:700;letter-spacing:-3px;line-height:1.0;}
+.divider .dsub{font-size:34px;color:var(--dim);margin-top:30px;max-width:1200px;line-height:1.4;}
+.divider .rule{width:120px;height:3px;background:var(--amber);margin-top:44px;}
+
+/* ===========================================
+   TITLE slide
+   =========================================== */
+.title-slide .led{width:13px;height:13px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green);animation:pulse 1.4s infinite;display:inline-block;}
+@keyframes pulse{50%{opacity:.35}}
+.title-slide h1{font-size:118px;font-weight:700;letter-spacing:-3px;line-height:.98;margin-bottom:26px;}
+.title-slide h1 .a{color:var(--amber);}
+
+/* ===========================================
+   REVEAL animation (per active slide)
+   =========================================== */
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .6s var(--ease),transform .6s var(--ease);}
+.slide.visible .reveal{opacity:1;transform:none;}
+.slide.visible .reveal:nth-child(1){transition-delay:.05s}
+.slide.visible .reveal:nth-child(2){transition-delay:.13s}
+.slide.visible .reveal:nth-child(3){transition-delay:.21s}
+.slide.visible .reveal:nth-child(4){transition-delay:.29s}
+.slide.visible .reveal:nth-child(5){transition-delay:.37s}
+.slide.visible .reveal:nth-child(6){transition-delay:.45s}
+
+/* ===========================================
+   DECK CHROME — progress, counter, hint
+   =========================================== */
+.deck-counter{position:fixed;right:26px;bottom:20px;z-index:1000;font-family:var(--font-mono);font-size:18px;color:var(--dim);background:rgba(10,12,16,.7);border:1px solid var(--line);padding:7px 14px;}
+.deck-counter b{color:var(--amber);}
+.deck-progress{position:fixed;left:0;top:0;height:3px;background:var(--amber);z-index:1001;width:0;transition:width .4s var(--ease);box-shadow:0 0 10px var(--amber);}
+.deck-hint{position:fixed;left:26px;bottom:20px;z-index:1000;font-family:var(--font-mono);font-size:16px;color:var(--dim-2);}
+
+/* edit affordance */
+.edit-hotzone{position:fixed;top:0;left:0;width:80px;height:80px;z-index:10000;cursor:pointer;}
+.edit-toggle{position:fixed;top:18px;left:18px;z-index:10001;opacity:0;pointer-events:none;transition:opacity .3s;background:var(--panel);border:1px solid var(--line-2);color:var(--txt);font-size:20px;width:46px;height:46px;border-radius:6px;cursor:pointer;}
+.edit-toggle.show,.edit-toggle.active{opacity:1;pointer-events:auto;}
+.edit-toggle.active{border-color:var(--amber);color:var(--amber);}
+body.editing [contenteditable]{outline:1px dashed var(--cyan);outline-offset:3px;}
+.edit-banner{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:10001;font-family:var(--font-mono);font-size:15px;color:var(--cyan);background:var(--panel);border:1px solid var(--cyan);padding:8px 16px;border-radius:6px;display:none;}
+body.editing .edit-banner{display:block;}
+</style>
+</head>
+<body>
+<div class="deck-progress" id="progress"></div>
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+
+<!-- ============================================================
+     SLIDE 1 — TITLE
+     ============================================================ -->
+<section class="slide title-slide active">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad" style="justify-content:center;">
+    <div class="hdr reveal"><span>FAST-TRANSLATION / REPORT v1 · 2026-06</span><span style="display:flex;align-items:center;gap:12px;color:var(--green)"><span class="led"></span>ON-DEVICE · OFFLINE</span></div>
+    <h1 class="reveal">App Dịch Giọng Nói<br><span class="a">Offline</span></h1>
+    <p class="lead reveal" style="font-size:34px;max-width:1300px;">Nghe → nhận dạng (ASR) → dịch (MT) → đọc lại (TTS), chạy hoàn toàn trên máy. Không cần internet khi sử dụng.</p>
+    <div class="cards reveal" style="margin-top:50px;">
+      <div class="card accent"><div class="lbl">NGÔN NGỮ</div><div class="val k-amber">EN·VI·ZH</div><div class="note">EN↔VI trực tiếp · VI↔ZH pivot EN</div></div>
+      <div class="card accent"><div class="lbl">QUY MÔ</div><div class="val k-cyan">119</div><div class="note">commit · 18 ngày (01→18/06)</div></div>
+      <div class="card accent"><div class="lbl">TRẠNG THÁI</div><div class="val good">main</div><div class="note">đã merge, kiến trúc live hotswap</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 2 — Một câu tóm tắt
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">00</span> · MỞ ĐẦU</span><span class="nums">02 / 28</span></div>
+    <h2 class="reveal">Một câu <span class="a">tóm tắt</span></h2>
+    <div class="body">
+      <div class="pipe reveal" style="margin-bottom:40px;">
+        <div class="stage"><span class="ic">🎙</span>Nghe nói</div><div class="sep">→</div>
+        <div class="stage"><span class="ic">📝</span>ASR<br><small style="color:var(--dim)">nhận dạng</small></div><div class="sep">→</div>
+        <div class="stage"><span class="ic">🌐</span>MT<br><small style="color:var(--dim)">dịch</small></div><div class="sep">→</div>
+        <div class="stage"><span class="ic">🔊</span>TTS<br><small style="color:var(--dim)">đọc lại</small></div>
+      </div>
+      <div class="callout reveal">App Android <b>dịch giọng nói chạy hoàn toàn trên máy</b> — <span class="good">không cần internet</span> khi dùng. Tập trung 3 ngôn ngữ cho hội thoại trực tiếp.</div>
+      <div class="two reveal" style="margin-top:36px;">
+        <div><div class="col-h">Dịch trực tiếp</div><div style="font-family:var(--font-mono);font-size:38px;" class="k-cyan">EN ↔ VI</div></div>
+        <div><div class="col-h">Bắc cầu qua tiếng Anh</div><div style="font-family:var(--font-mono);font-size:38px;" class="k-amber">VI → EN → ZH</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 3 — Định vị
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">00</span> · MỞ ĐẦU</span><span class="nums">03 / 28</span></div>
+    <h2 class="reveal">Định vị sản phẩm</h2>
+    <p class="lead reveal">Không phải đối thủ "phủ rộng" như Google Translate.</p>
+    <div class="body">
+      <div class="statement reveal" style="margin-bottom:44px;">Chuyên sâu · <span class="a">Riêng tư</span> · Offline</div>
+      <div class="two reveal">
+        <div class="callout">Cho một <b>bộ ngôn ngữ hẹp</b> mà ta kiểm soát được <b>từng tầng lỗi</b> — ASR, MT, TTS.</div>
+        <div class="callout cyan">Đánh đổi độ phủ lấy <b>chất lượng, tốc độ, và quyền riêng tư</b> (dữ liệu không rời máy).</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 4 — DIVIDER Phần 1: Demo
+     ============================================================ -->
+<section class="slide divider">
+  <div class="grid-bg"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="sec-no reveal">01</div>
+  <div class="pad" style="justify-content:center;">
+    <div class="kick reveal">Phần 01</div>
+    <h1 class="reveal">Demo</h1>
+    <div class="dsub reveal">Cho người xem thấy sản phẩm chạy thật trước — giải thích kỹ thuật sau.</div>
+    <div class="rule reveal"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 5 — Kịch bản demo
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">01</span> · DEMO</span><span class="nums">05 / 28</span></div>
+    <h2 class="reveal">Kịch bản clip demo</h2>
+    <div class="body">
+      <ol class="steps reveal">
+        <li><b>Bật chế độ máy bay</b> — chứng minh chạy offline sau khi đã cài model.</li>
+        <li>Chọn chiều <span class="inline-code">EN→VI</span> · bấm <b>Live Session</b> · nói một câu ngắn thực tế.</li>
+        <li>Màn hình hiện: <span class="good">chữ nhận dạng → chữ đã dịch → phát giọng nói dịch</span>.</li>
+        <li><b>Hotswap đổi chiều</b> ngay trong phiên · giữ <b>Push-To-Talk</b> · mở <b>Debug timeline</b>.</li>
+      </ol>
+      <div class="callout cyan reveal" style="margin-top:36px;">Câu mở màn ngắn, dễ đúng: <i>"What time is the meeting tomorrow?"</i> — câu dài/nhiễu để dành phần "điểm yếu".</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 6 — Hai nút hai chế độ
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">01</span> · DEMO</span><span class="nums">06 / 28</span></div>
+    <h2 class="reveal">Hai nút — hai chế độ</h2>
+    <div class="body">
+      <div class="t-wrap reveal">
+        <table>
+          <thead><tr><th style="width:24%">Nút</th><th style="width:28%">Thao tác</th><th>Hành vi</th></tr></thead>
+          <tbody>
+            <tr><td><b class="k-amber">Live Session</b><br><small style="color:var(--dim)">icon hội thoại</small></td><td>Bấm bật · bấm lại tắt</td><td>Phiên thông dịch liên tục. ASR/semantic-VAD tự chốt từng câu; mic vẫn nghe câu kế tiếp.</td></tr>
+            <tr><td><b class="k-cyan">Push-To-Talk</b><br><small style="color:var(--dim)">icon mic</small></td><td>Giữ thu · thả dừng</td><td>Một lượt thu duy nhất. Thả nút → phát bản dịch đã buffer.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout reveal" style="margin-top:34px;">Live Session = hội thoại rảnh tay. Push-To-Talk = kiểm soát chính xác từng lượt nói.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 7 — DIVIDER Phần 2: Workflow
+     ============================================================ -->
+<section class="slide divider">
+  <div class="grid-bg"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="sec-no reveal">02</div>
+  <div class="pad" style="justify-content:center;">
+    <div class="kick reveal">Phần 02</div>
+    <h1 class="reveal">Workflow</h1>
+    <div class="dsub reveal">Kiến trúc hiện tại — đi theo đường đi của một câu nói.</div>
+    <div class="rule reveal"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 8 — Luồng tổng thể (flow)
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">02</span> · WORKFLOW</span><span class="nums">08 / 28</span></div>
+    <h2 class="reveal">Luồng tổng thể</h2>
+    <div class="body">
+      <div class="flow reveal" style="gap:8px;">
+        <div class="node">Mic → AudioRecorder<span class="desc">thu âm thanh</span></div>
+        <div class="arrow">↓</div>
+        <div class="node hl">EchoCanceller / cổng chặn playback<span class="desc">chống tự nghe tiếng loa</span></div>
+        <div class="arrow">↓</div>
+        <div class="node">StreamingAsrSession → semantic VAD<span class="desc">nhận dạng + chốt câu theo nghĩa</span></div>
+        <div class="arrow">↓</div>
+        <div class="node hl">CAPU + spoken-norm (ASR→văn viết)<span class="desc">hoa/dấu câu · số/ngày/giờ/ID</span></div>
+        <div class="arrow">↓</div>
+        <div class="node">OnnxTranslator → (pivot EN cho VI/ZH)<span class="desc">dịch ONNX nội bộ</span></div>
+        <div class="arrow">↓</div>
+        <div class="node hl">vintts-norm (văn viết→văn đọc)<span class="desc">"2h30p"→"hai giờ ba mươi phút"</span></div>
+        <div class="arrow">↓</div>
+        <div class="node">TtsEngineSherpa → StreamingAudioPlayer → Loa<span class="desc">tổng hợp giọng</span></div>
+      </div>
+      <div class="callout cyan reveal" style="margin-top:18px;font-size:23px;">Hai tầng chuẩn hóa khác nhau: <b>spoken-norm</b> sửa input cho MT (ASR văn nói → văn viết); <b>vintts-norm</b> sửa output cho TTS (số/ký hiệu → cách đọc, vì Piper VITS không tự đọc <span class="inline-code">2h30p</span>).</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 9 — DIVIDER Phần 3: Research
+     ============================================================ -->
+<section class="slide divider">
+  <div class="grid-bg"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="sec-no reveal">03</div>
+  <div class="pad" style="justify-content:center;">
+    <div class="kick reveal">Phần 03</div>
+    <h1 class="reveal">Research<br>&amp; Benchmark</h1>
+    <div class="dsub reveal">~10 report rời → 4 nhóm bằng chứng: ASR · MT · Pre-MT · TTS.</div>
+    <div class="rule reveal"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 11 — Cảnh báo runtime
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03</span> · RESEARCH</span><span class="nums">11 / 28</span></div>
+    <h2 class="reveal">⚠ Đọc runtime <span class="a">trước khi so số</span></h2>
+    <p class="lead reveal">Có 3 runtime khác nhau trong các report — số không thể trộn lẫn.</p>
+    <div class="body">
+      <div class="t-wrap reveal">
+        <table>
+          <thead><tr><th>Runtime</th><th>Là gì</th><th>Ý nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td class="k-cyan"><b>Android ONNX int8</b></td><td>greedy decode, on-device</td><td class="good">Số THẬT người dùng thấy</td></tr>
+            <tr><td class="k-amber"><b>CTranslate2 int8 beam-5</b></td><td>bảng chọn model, 60 mẫu</td><td>BLEU cao hơn (beam search)</td></tr>
+            <tr><td><b>HF PyTorch</b></td><td>probe chất lượng tay</td><td>Kiểm tra parity</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout red reveal" style="margin-top:32px;"><b>KHÔNG trộn BLEU giữa 3 runtime.</b> BLEU 62 (beam-5) và BLEU 27 (ONNX) đo trên 2 thế giới khác nhau.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 12 — ASR scorecard
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·A</span> · ASR</span><span class="nums">12 / 28</span></div>
+    <h2 class="reveal">ASR · Scorecard tổng</h2>
+    <p class="lead reveal">600 mẫu thật · 100ms chunks · network tắt · Zipformer2 streaming.</p>
+    <div class="body">
+      <div class="t-wrap reveal">
+        <table class="sm">
+          <thead><tr><th>Split</th><th class="num">Mẫu</th><th class="num">Blank</th><th class="num">Avg WER</th><th class="num">Avg CER</th><th class="num">Infer RTF</th><th class="num">RAM</th></tr></thead>
+          <tbody>
+            <tr><td>ALL</td><td class="num">600</td><td class="num">7.7%</td><td class="num">0.334</td><td class="num">0.291</td><td class="num k-cyan"><b>0.115</b></td><td class="num">264MB</td></tr>
+            <tr><td>EN</td><td class="num">300</td><td class="num warnc">15.3%</td><td class="num warnc">0.455</td><td class="num">0.391</td><td class="num">0.126</td><td class="num">195MB</td></tr>
+            <tr><td>VI</td><td class="num">300</td><td class="num good">0%</td><td class="num good">0.213</td><td class="num">0.191</td><td class="num">0.104</td><td class="num">332MB</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="cards reveal" style="margin-top:30px;">
+        <div class="card"><div class="lbl">TỐC ĐỘ</div><div class="val good">~8.7×</div><div class="note">nhanh hơn real-time (infer RTF 0.115)</div></div>
+        <div class="card"><div class="lbl">VI BLANK</div><div class="val k-cyan">0%</div><div class="note">production candidate</div></div>
+        <div class="card"><div class="lbl">EN BLANK</div><div class="val warnc">15.3%</div><div class="note">yếu — xem breakdown domain</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 13 — ASR EN theo domain
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·A</span> · ASR</span><span class="nums">13 / 28</span></div>
+    <h2 class="reveal">ASR · EN hỏng <span class="a">theo domain</span>, không hỏng đều</h2>
+    <div class="body">
+      <div class="t-wrap reveal">
+        <table class="sm">
+          <thead><tr><th>EN domain</th><th class="num">Blank</th><th class="num">Avg WER</th><th>Đánh giá</th></tr></thead>
+          <tbody>
+            <tr><td>Read speech clean</td><td class="num">0%</td><td class="num good">0.071</td><td class="good">✅ Rất tốt</td></tr>
+            <tr><td>Read speech harder</td><td class="num">0%</td><td class="num good">0.100</td><td class="good">✅ Tốt</td></tr>
+            <tr><td>Diverse web clean</td><td class="num">2%</td><td class="num warnc">0.544</td><td class="warnc">⚠ Yếu</td></tr>
+            <tr><td>Diverse web dirty (val)</td><td class="num">22%</td><td class="num bad">0.738</td><td class="bad">❌ Rủi ro cao</td></tr>
+            <tr><td>Multilingual clean (val)</td><td class="num bad">68%</td><td class="num bad">0.788</td><td class="bad">❌ Rủi ro rất cao</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout reveal" style="margin-top:28px;"><b>34/46 blank của EN</b> (≈74%) đến từ riêng nhóm multilingual. VI cùng nhóm: <span class="good">0% blank</span>. → vấn đề là <b>model EN theo domain</b>, không phải pipeline.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 14 — ASR kết luận
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·A</span> · ASR · KẾT LUẬN</span><span class="nums">14 / 28</span></div>
+    <h2 class="reveal">Kết luận ASR</h2>
+    <div class="body">
+      <ul class="bul reveal">
+        <li class="good">✅ Chạy offline, nhanh hơn real-time ~8.7× (infer RTF 0.115).</li>
+        <li class="good">✅ VI mạnh (0 blank, WER 0.213) → production candidate.</li>
+        <li class="warnc">⚠ EN yếu <b>theo domain</b>, không hỏng pipeline: read-speech 0.07 → multilingual 0.79 (worst sample WER 1.24).</li>
+        <li>📌 Blocker = <b>chất lượng model EN theo domain</b> → cần A/B model EN khác, không tune endpoint thêm.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 15 — MT chọn model
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·B</span> · MT</span><span class="nums">15 / 28</span></div>
+    <h2 class="reveal" style="margin-bottom:4px;">MT · Chọn model nào</h2>
+    <p class="lead reveal" style="margin-bottom:14px;font-size:26px;">CTranslate2 int8 beam-5, 60 mẫu BLEU — bảng <i>chọn model</i> (không phải runtime thật).</p>
+    <div class="body" style="justify-content:flex-start;">
+      <div class="t-wrap reveal">
+        <table class="sm" style="font-size:21px;">
+          <thead><tr><th>Upstream model</th><th>Chiều</th><th class="num">BLEU</th><th class="num">P95</th><th class="num">Disk</th><th>QĐ</th></tr></thead>
+          <tbody>
+            <tr><td><span class="inline-code">datnth1709/finetuned_HelsinkiNLP-opus-mt-en-vi_PhoMT</span></td><td>en→vi</td><td class="num good"><b>62.3</b></td><td class="num">209ms</td><td class="num">71MB</td><td class="good">✅</td></tr>
+            <tr><td><span class="inline-code">facebook/nllb-200-distilled-600M</span></td><td>en→vi</td><td class="num">59.1</td><td class="num bad">1373ms</td><td class="num bad">599MB</td><td class="bad">❌</td></tr>
+            <tr><td><span class="inline-code">facebook/m2m100_418M</span></td><td>en→vi</td><td class="num">42.1</td><td class="num">967ms</td><td class="num">471MB</td><td class="bad">❌</td></tr>
+            <tr><td><span class="inline-code">alirezamsh/small100</span></td><td>en→vi</td><td class="num bad">0.11</td><td class="num">526ms</td><td class="num">326MB</td><td class="bad">❌</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="reveal" style="margin-top:16px;">
+        <div class="col-h" style="margin-bottom:10px;">Model dùng trong production (nền Helsinki-NLP OPUS-MT base)</div>
+        <div class="t-wrap">
+          <table class="sm" style="font-size:21px;">
+            <thead><tr><th>Chiều</th><th>Model deploy</th><th class="num">BLEU</th><th class="num">RAM</th></tr></thead>
+            <tbody>
+              <tr><td>en→vi</td><td><span class="inline-code">finetuned_HelsinkiNLP-opus-mt-en-vi_PhoMT</span></td><td class="num good">62.3</td><td class="num">461MB</td></tr>
+              <tr><td>vi→en</td><td><span class="inline-code">finetuned_HelsinkiNLP-opus-mt-vi-en_PhoMT</span></td><td class="num good">47.3</td><td class="num">462MB</td></tr>
+              <tr><td>zh→vi</td><td><span class="inline-code">Helsinki-NLP/opus-mt-zh-en</span> + en→vi PhoMT (pivot)</td><td class="num">49.3</td><td class="num">561MB</td></tr>
+              <tr><td>vi→zh</td><td>vi→en PhoMT + <span class="inline-code">rickltt/opus_mt_en_zh_AIchallenger</span> (pivot)</td><td class="num">42.4</td><td class="num">559MB</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="callout reveal" style="margin-top:14px;font-size:21px;padding:16px 24px;">Tham số: <span class="inline-code">int8 · beam=5 (bench) / greedy (runtime) · max_new_tokens=96</span>. Nền chung <b>OPUS-MT base</b> (Helsinki-NLP) → dễ finetune PhoMT. Pivot VI↔ZH ghép 2 chặng OPUS qua EN.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 16 — MT runtime thật
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·B</span> · MT</span><span class="nums">16 / 28</span></div>
+    <h2 class="reveal">MT · Runtime thật trên máy</h2>
+    <p class="lead reveal">Android ONNX int8 greedy · 500 mẫu PhoMT — <span class="good">số người dùng thực sự thấy</span>.</p>
+    <div class="body">
+      <div class="t-wrap reveal">
+        <table class="sm">
+          <thead><tr><th>Chiều</th><th class="num">BLEU</th><th class="num">chrF</th><th class="num">P50</th><th class="num">P95</th><th class="num">P99</th><th class="num">Chars/s</th></tr></thead>
+          <tbody>
+            <tr><td>EN→VI</td><td class="num">27.81</td><td class="num">44.23</td><td class="num">76ms</td><td class="num good">469ms</td><td class="num">949ms</td><td class="num">543</td></tr>
+            <tr><td>VI→EN</td><td class="num">26.05</td><td class="num">48.97</td><td class="num">55ms</td><td class="num good">314ms</td><td class="num">724ms</td><td class="num">736</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout cyan reveal" style="margin-top:30px;"><b>Vì sao BLEU 62→28?</b> Runtime thật dùng <b>greedy + int8</b> (không beam-5), 500 mẫu. BLEU ~27 = "khá" (hiểu được, còn lỗi). Đổi lại: <span class="good">P95 &lt; 0.5s, offline, CPU điện thoại</span>.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 17 — MT chất lượng tay + chiến lược
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·B</span> · MT</span><span class="nums">17 / 28</span></div>
+    <h2 class="reveal">MT · Chất lượng tay &amp; chiến lược finetune</h2>
+    <div class="body">
+      <div class="two reveal">
+        <div>
+          <div class="col-h">Lỗi đã biết (đo được)</div>
+          <ul class="bul tight">
+            <li>PhoMT <b>thắng</b> base trên input ASR chữ thường.</li>
+            <li>Int8 mất dấu tên riêng: <span class="inline-code">Đà Nẵng→Đà Nam</span></li>
+            <li>Hallucinate số: <span class="inline-code">247→277</span></li>
+            <li>Cắt nửa câu (EOS sớm, max_len=128).</li>
+          </ul>
+        </div>
+        <div>
+          <div class="col-h">Vì sao giữ nền OPUS base</div>
+          <ul class="bul tight">
+            <li>Nền <b>dễ finetune</b> lại (PhoMT + dataset tự xây).</li>
+            <li>Dataset chuyên <b>tên riêng/địa danh/đường VN</b>.</li>
+            <li>Diệt đúng lỗi mất dấu thực thể.</li>
+            <li>Nhẹ 71MB + hệ sinh thái finetune sẵn.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout reveal" style="margin-top:30px;">Chọn OPUS-MT base không vì nó hoàn hảo, mà vì là <b>nền dễ vá đúng chỗ đau</b>.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 18 — Pre-MT context buffer
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·C</span> · PRE-MT</span><span class="nums">18 / 28</span></div>
+    <h2 class="reveal">Pre-MT · Context buffer</h2>
+    <p class="lead reveal">Gom ASR final segment rời thành câu đủ nghĩa trước khi dịch.</p>
+    <div class="body">
+      <div class="t-wrap reveal">
+        <table class="sm">
+          <thead><tr><th>Chỉ số</th><th class="num">Raw</th><th class="num">Có buffer</th><th class="num">Cải thiện</th></tr></thead>
+          <tbody>
+            <tr><td>MT input segments</td><td class="num">1249</td><td class="num">1013</td><td class="num good">-18.9%</td></tr>
+            <tr><td>Avg từ / segment</td><td class="num">9.71</td><td class="num">11.98</td><td class="num good">+23.3%</td></tr>
+            <tr><td>Câu quá ngắn (&lt;5 từ)</td><td class="num">23.6%</td><td class="num good"><b>10.2%</b></td><td class="num good">-57%</td></tr>
+            <tr><td>Câu cụt nghĩa</td><td class="num">10.4%</td><td class="num good">7.9%</td><td class="num good">-24%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout reveal" style="margin-top:28px;"><b>Tradeoff:</b> chờ thêm TB <b>4.2s</b>, P95 6s (chỉ áp cho đoạn được gom). Config <span class="inline-code">minWords=7, maxContextMs=10000</span>.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 19 — Pre-MT spoken-norm neural
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·C</span> · PRE-MT</span><span class="nums">19 / 28</span></div>
+    <h2 class="reveal">Pre-MT · Spoken-norm <span class="a">neural</span></h2>
+    <p class="lead reveal">Rule-based → model neural on-device (VI) · commit <span class="inline-code">9fba3e8</span></p>
+    <div class="body">
+      <div class="t-wrap reveal">
+        <table class="sm">
+          <thead><tr><th>Input (văn nói)</th><th>Output (văn viết)</th></tr></thead>
+          <tbody>
+            <tr><td>tám giờ chín phút ngày mười tám tháng năm...</td><td><span class="inline-code">8h9 18/5/2022</span></td></tr>
+            <tr><td>mã số quy đê tê tê đê hai tám chéo hai không không ba</td><td><span class="inline-code">mã số qdttd28/2003</span></td></tr>
+            <tr><td>năm mươi phần trăm</td><td><span class="inline-code">50%</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="two reveal" style="margin-top:28px;">
+        <div class="callout cyan">Một model lo cả số/ngày/giờ/ID/% thay vì N luật rời. Học pattern tổng quát mà luật khó bắt.</div>
+        <div class="callout red"><b>⚠ Gotcha:</b> checkpoint phải <span class="inline-code">-taggen</span> (không phải <span class="inline-code">spoken-norm</span> bias-only). Fallback rule-based, <b>không bao giờ throw</b>.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 20 — TTS so model (benchmark, có MeloTTS) — TRƯỚC Piper detail
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·D</span> · TTS</span><span class="nums">20 / 28</span></div>
+    <h2 class="reveal">TTS · So 4 model Việt</h2>
+    <p class="lead reveal">190 run · 90 test case · Intel Core Ultra 7 — chọn model trước, mổ Piper sau.</p>
+    <div class="body">
+      <div class="t-wrap reveal">
+        <table class="sm">
+          <thead><tr><th>Model</th><th class="num">Latency TB</th><th class="num">RTF</th><th class="num">RAM</th><th>Kiến trúc</th><th>Streaming</th></tr></thead>
+          <tbody>
+            <tr><td><b class="k-amber">Piper (Python API)</b></td><td class="num good"><b>138ms</b></td><td class="num good">0.07</td><td class="num good">159MB</td><td>VITS non-AR</td><td class="good">✅ Native</td></tr>
+            <tr><td>Supertonic 3</td><td class="num">1187ms</td><td class="num">0.49</td><td class="num">488MB</td><td>Diffusion</td><td class="bad">❌ Batch</td></tr>
+            <tr><td>VieNeu Turbo</td><td class="num">1375ms</td><td class="num">0.75</td><td class="num">893MB</td><td>AR LLM</td><td class="warnc">⚠ 100-200ms</td></tr>
+            <tr><td>MeloTTS Vietnamese</td><td class="num bad">2336ms</td><td class="num bad">1.13</td><td class="num">N/A</td><td>Flow-based</td><td class="bad">❌ Batch</td></tr>
+            <tr><td>Piper CLI <span class="warnc">⚠</span></td><td class="num bad">2393ms</td><td class="num bad">2.09</td><td class="num">159MB</td><td colspan="2">sai mode đo (startup mỗi request)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="two reveal" style="margin-top:24px;">
+        <div class="callout">Piper nhanh hơn <b>8.6× Supertonic · 10× VieNeu · ~17× MeloTTS</b>. Footprint nhỏ nhất (model 60MB).</div>
+        <div class="callout red"><b>⚠ Bài học đo:</b> Piper CLI 2393ms vs API 138ms — chênh <b>41×</b> chỉ do mode đo. <b>Không đo TTS resident bằng CLI.</b></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 21 — Piper production: chất lượng + latency thiết bị + finetune
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03·D</span> · TTS · PIPER</span><span class="nums">21 / 28</span></div>
+    <h2 class="reveal">Piper · Chất lượng &amp; finetune giọng VI</h2>
+    <div class="body">
+      <div class="two reveal">
+        <div>
+          <div class="col-h">Chất lượng + latency thiết bị</div>
+          <div class="t-wrap">
+            <table class="sm">
+              <thead><tr><th>Chỉ số</th><th class="num">EN</th><th class="num">VI</th></tr></thead>
+              <tbody>
+                <tr><td>UTMOS (desktop)</td><td class="num good">4.24</td><td class="num warnc">2.22</td></tr>
+                <tr><td>RTF</td><td class="num">0.087</td><td class="num">0.085</td></tr>
+                <tr><td>TTFA p95 (thiết bị)</td><td class="num good" colspan="2" style="text-align:center">176ms · synth E2E p95 1909ms</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div class="col-h">Finetune giọng VI · UTMOS</div>
+          <div class="t-wrap">
+            <table class="sm">
+              <thead><tr><th>Giai đoạn</th><th class="num">UTMOS</th></tr></thead>
+              <tbody>
+                <tr><td>🎯 StyleTTS SFM (trần)</td><td class="num">2.351</td></tr>
+                <tr><td>VAIS1000 base (trước)</td><td class="num warnc">1.912</td></tr>
+                <tr><td>thuyduyen 365k (sau)</td><td class="num good">2.277</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="callout reveal" style="margin-top:24px;">Finetune kéo UTMOS <b>1.912→2.277</b> (<span class="good">+19% rel</span>), sát trần StyleTTS 2.351. TTFA p95 <b>176ms</b> đủ nhanh đáp tức thì. <span class="warnc">⚠ UTMOS không bắt lỗi phát âm "d"/"tr" → phải nghe tai người.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 22 — Kết luận 4 nhóm
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">03</span> · RESEARCH · KẾT LUẬN</span><span class="nums">22 / 28</span></div>
+    <h2 class="reveal">Tóm tắt 4 nhóm</h2>
+    <div class="body">
+      <div class="cards reveal" style="margin-bottom:40px;">
+        <div class="card"><div class="lbl">ASR</div><div style="font-size:24px;line-height:1.35">VI mạnh (0 blank), EN yếu theo domain (ML blank 68%)</div></div>
+        <div class="card"><div class="lbl">MT</div><div style="font-size:24px;line-height:1.35">PhoMT đúng (beam-5 62), runtime BLEU~27 nhưng P95&lt;0.5s</div></div>
+        <div class="card"><div class="lbl">PRE-MT</div><div style="font-size:24px;line-height:1.35">buffer -57% câu ngắn, spoken-norm an toàn</div></div>
+        <div class="card"><div class="lbl">TTS</div><div style="font-size:24px;line-height:1.35">nhanh (TTFA p95 176ms), giọng VI cần tai người</div></div>
+      </div>
+      <div class="statement reveal center" style="text-align:center;">Tốc độ <span class="a">KHÔNG</span> phải vấn đề —<br>chất lượng model ở biên mới là vấn đề.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 23 — DIVIDER Phần 4: Timeline
+     ============================================================ -->
+<section class="slide divider">
+  <div class="grid-bg"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="sec-no reveal">04</div>
+  <div class="pad" style="justify-content:center;">
+    <div class="kick reveal">Phần 04</div>
+    <h1 class="reveal">Timeline<br>&amp; Thành tựu</h1>
+    <div class="dsub reveal">119 commit · 01/06 → 18/06/2026.</div>
+    <div class="rule reveal"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 24 — 4 tuần (timeline spine — ngầu)
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">04</span> · TIMELINE</span><span class="nums">24 / 28</span></div>
+    <h2 class="reveal" style="margin-bottom:2px;">Bốn tuần · <span class="a">119 commit</span> · 18 ngày</h2>
+    <p class="lead reveal" style="font-size:24px;margin-bottom:16px;">Mỗi tuần một bước nhảy — và mỗi bước phải vượt một rào kỹ thuật thật.</p>
+    <div class="body" style="justify-content:flex-start;">
+      <div class="tl reveal">
+        <div class="tl-spine"></div>
+        <div class="tl-col">
+          <div class="tl-node"><span class="tl-dot"></span><span class="tl-wk">T1</span><span class="tl-date">01–07/06</span><span class="tl-cm">~37 commit</span></div>
+          <div class="tl-card">
+            <div class="tl-title">Nền tảng → loop offline</div>
+            <div class="tl-body">Dựng app shell PTT, định nghĩa contract ASR/MT/TTS để engine thay được, ghép Sherpa Zipformer + OPUS-MT chạy liền mạch offline. Vượt xung đột JNI, dual ONNX Runtime SONAME, căn SDK/JDK để chạy model native trên Android.</div>
+            <div class="tl-why">→ 3 demo rời thành bộ khung thông dịch thật</div>
+          </div>
+        </div>
+        <div class="tl-col">
+          <div class="tl-node"><span class="tl-dot"></span><span class="tl-wk">T2</span><span class="tl-date">08–14/06</span><span class="tl-cm">~33 commit</span></div>
+          <div class="tl-card">
+            <div class="tl-title">Benchmark · đa ngôn ngữ</div>
+            <div class="tl-body">Build hạ tầng benchmark ASR/MT/TTS, semantic VAD chốt câu theo nghĩa, streaming MT/TTS theo segment, pivot VI/ZH, debug console. Thử 4 model MT (OPUS/NLLB/M2M100/small100), tự dựng pipeline đo BLEU/latency để có bằng chứng thay vì cảm tính.</div>
+            <div class="tl-why">→ từ "chạy được" sang đo được, quan sát được</div>
+          </div>
+        </div>
+        <div class="tl-col">
+          <div class="tl-node"><span class="tl-dot"></span><span class="tl-wk">T3</span><span class="tl-date">15–17/06</span><span class="tl-cm">~30 commit</span></div>
+          <div class="tl-card">
+            <div class="tl-title">Chất lượng &amp; live hardening</div>
+            <div class="tl-body">ASR final pass, WebRTC AEC, spoken-norm neural on-device, chặn vòng lặp echo, warm TTS lúc khởi động. Xử lý loa lọt vào mic (app tự dịch tiếng mình) + export ONNX spoken-norm với checkpoint <span class="inline-code">-taggen</span>.</div>
+            <div class="tl-why">→ live loop an toàn với echo, cold-start, input nhiễu</div>
+          </div>
+        </div>
+        <div class="tl-col">
+          <div class="tl-node"><span class="tl-dot last"></span><span class="tl-wk">T4</span><span class="tl-date">17–18/06</span><span class="tl-cm">~19 commit</span></div>
+          <div class="tl-card hot">
+            <div class="tl-title">Hotswap &amp; RAM → <span class="inline-code">main</span></div>
+            <div class="tl-body">Live hotswap đổi chiều giữa phiên, preload chiều ngược resident, ORT low-memory chống OOM (máy 4GB crash sau vài lượt vì arena ratchet), merge lên main mà không kẹt partial cũ.</div>
+            <div class="tl-why">→ thành một cuộc hội thoại liên tục</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 25 — Thành tựu lớn nhất
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">04</span> · THÀNH TỰU</span><span class="nums">25 / 28</span></div>
+    <h2 class="reveal">Thành tựu lớn nhất</h2>
+    <div class="body">
+      <div class="callout reveal" style="font-size:31px;margin-bottom:40px;"><b>3 demo rời</b> (ASR, MT, TTS) → <span class="good">một vòng thông dịch live, offline, có bằng chứng benchmark, chạy trên <span class="inline-code">main</span></span> — trong 18 ngày, 119 commit.</div>
+      <div class="pipe reveal">
+        <div class="stage"><span class="ic">①</span>Demo rời<br><small style="color:var(--dim)">→ pipeline nối (T1)</small></div><div class="sep">→</div>
+        <div class="stage"><span class="ic">②</span>Pipeline<br><small style="color:var(--dim)">→ đo được (T2)</small></div><div class="sep">→</div>
+        <div class="stage"><span class="ic">③</span>Đo được<br><small style="color:var(--dim)">→ hội thoại an toàn (T3-4)</small></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 26 — DIVIDER Phần 5: Thách thức
+     ============================================================ -->
+<section class="slide divider">
+  <div class="grid-bg"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="sec-no reveal">05</div>
+  <div class="pad" style="justify-content:center;">
+    <div class="kick reveal">Phần 05</div>
+    <h1 class="reveal">Thách thức<br>&amp; Điểm yếu</h1>
+    <div class="dsub reveal">Nói rõ điểm yếu trước khi người khác tìm ra — stakeholder tin hơn khi mình thành thật.</div>
+    <div class="rule reveal"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 27 — Giọng VI + bảng rủi ro (gộp, reading-first)
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">05</span> · THÁCH THỨC</span><span class="nums">27 / 28</span></div>
+    <h2 class="reveal">Điểm yếu nổi bật + bảng rủi ro</h2>
+    <div class="body">
+      <div class="callout red reveal" style="margin-bottom:24px;"><b>Giọng VI <span class="inline-code">thuyduyen</span> — lỗi "d"/"tr":</b> finetune <span class="good">tăng</span> UTMOS (1.91→2.28) nhưng <span class="bad">vẫn sai phụ âm</span>. UTMOS chấm waveform, không kiểm phát âm → <b>metric không thay được tai người</b>.</div>
+      <div class="t-wrap reveal">
+        <table class="sm">
+          <thead><tr><th>Rủi ro</th><th>Vì sao quan trọng</th><th>Giảm thiểu</th></tr></thead>
+          <tbody>
+            <tr><td class="warnc">ASR EN yếu theo domain</td><td>Transcript sai → dịch sai dây chuyền</td><td>A/B model EN khác, test nhiều thiết bị</td></tr>
+            <tr><td class="warnc">MT cắt câu / hallucinate</td><td>Mất nghĩa câu dài/nhiễu</td><td>Tăng max_len, beam, tune domain</td></tr>
+            <tr><td class="warnc">Bắc cầu VI↔ZH</td><td>Lỗi cộng dồn 2 chặng</td><td>Model VI↔ZH trực tiếp về sau</td></tr>
+            <tr><td class="warnc">Áp lực RAM</td><td>Máy 4GB crash sau vài lượt</td><td>ORT low-memory, giới hạn cặp resident</td></tr>
+            <tr><td class="warnc">Tên riêng VI mất dấu</td><td>Sai tên người/địa danh</td><td>Tokenizer xử lý OOV tốt hơn</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE — So sánh đối thủ Kobota (đặt trong phần Thách thức)
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal" style="margin-bottom:18px;"><span><span class="tag">05</span> · ĐỐI THỦ</span><span class="nums">— / —</span></div>
+    <h2 class="reveal" style="margin-bottom:2px;">So với <span class="a">Kobota</span> (app dịch online)</h2>
+    <p class="lead reveal" style="font-size:23px;margin-bottom:12px;">Kobota chạy cloud, dịch real-time rất nhanh. Ta thắng ở offline + tương tác, thua ở mô hình dịch.</p>
+    <div class="body" style="justify-content:flex-start;">
+      <div class="t-wrap reveal">
+        <table class="sm" style="font-size:20px;">
+          <thead><tr><th>Tiêu chí</th><th>App của ta</th><th>Kobota</th></tr></thead>
+          <tbody>
+            <tr><td>Chạy ở đâu</td><td class="good">On-device, offline ✅</td><td class="warnc">Cloud, cần mạng</td></tr>
+            <tr><td>Riêng tư</td><td class="good">Dữ liệu không rời máy ✅</td><td class="warnc">Audio lên server</td></tr>
+            <tr><td>Tốc độ dịch</td><td>Chậm hơn nhưng <b>vẫn rất nhanh</b> (P95 &lt;0.5s)</td><td class="good">Real-time, rất nhanh</td></tr>
+            <tr><td>Push-To-Talk</td><td class="good">Có — câu nhanh gọn ✅</td><td class="bad">Không</td></tr>
+            <tr><td>Đổi chiều ngôn ngữ</td><td class="good">Hotswap ngay trong session ✅</td><td class="bad">Phải tắt → đổi → mở lại session</td></tr>
+            <tr><td>AI summary toàn bộ session</td><td class="bad">Chưa có</td><td class="good">Có ✅</td></tr>
+            <tr><td>Chất lượng dịch (MT)</td><td class="bad">Model MT còn yếu (sai số, mất chữ, sai nghĩa)</td><td class="good">Mạnh hơn</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="two reveal" style="margin-top:12px;">
+        <div class="callout" style="font-size:20px;padding:14px 20px;"><b class="good">Ta thắng:</b> offline + riêng tư, Push-To-Talk, hotswap đổi chiều liền mạch. ASR · norm · viết hoa tên riêng · TTS-norm · TTS đã rất tốt.</div>
+        <div class="callout red" style="font-size:20px;padding:14px 20px;"><b>Điểm yếu lớn nhất:</b> <b>model MT</b> — dịch sai số, mất chữ, sai nghĩa. Cộng thiếu AI summary. Blocker chính cần vá.</div>
+      </div>
+      <div class="callout cyan reveal" style="margin-top:12px;font-size:20px;padding:14px 20px;"><b>Đánh giá nghe (chủ quan):</b> <b>ASR</b> đa số nói rõ ràng đều bắt hết. <b>TTS EN</b> Kobota nghe tốt hơn. <b>TTS VI:</b> voice Kobota phổ thông, máy móc; voice ta đã finetune — còn lỗi "d"/"tr" nhưng nghe <span class="good">giống người thật hơn, giọng ngọt</span>.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE — Hướng phát triển + tầm nhìn (closing)
+     ============================================================ -->
+<section class="slide">
+  <div class="grid-bg"></div><div class="frame"></div>
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <div class="pad">
+    <div class="hdr reveal"><span><span class="tag">06</span> · HƯỚNG PHÁT TRIỂN</span><span class="nums">28 / 28</span></div>
+    <h2 class="reveal">Hướng đi &amp; <span class="a">tầm nhìn</span></h2>
+    <div class="body">
+      <div class="two reveal" style="margin-bottom:26px;">
+        <div>
+          <div class="col-h">Gần / trung hạn</div>
+          <ul class="bul tight">
+            <li>Test hotswap thiết bị thật · nghe duyệt TTS "d"/"tr".</li>
+            <li>Stress-test RAM máy yếu, phiên 10 phút.</li>
+            <li>Cải thiện ASR EN (blocker lớn nhất).</li>
+            <li>Finetune MT tên riêng/địa danh VN.</li>
+          </ul>
+        </div>
+        <div>
+          <div class="col-h">Dài hạn · phần cứng</div>
+          <ul class="bul tight">
+            <li><b>Headset BT ↔ điện thoại</b>: phone làm "edge brain", rảnh tay.</li>
+            <li>VI↔ZH trực tiếp (bỏ cầu EN).</li>
+            <li>Domain mode: y tế / giáo dục / nhà máy.</li>
+            <li>Telemetry tôn trọng riêng tư.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout cyan reveal" style="text-align:center;font-size:29px;">Tầm nhìn: <b>thiết bị thông dịch đeo được, chạy offline, riêng tư</b> — nói chuyện tự nhiên hai chiều, điện thoại trong túi làm bộ não. <span class="k-cyan">Không mạng · không lộ dữ liệu.</span></div>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<!-- DECK CHROME -->
+<div class="deck-counter"><b id="cur">1</b> / <span id="tot">28</span></div>
+<div class="deck-hint">← → di chuyển · F toàn màn hình · E sửa chữ · O tổng quan</div>
+<div class="edit-hotzone"></div>
+<button class="edit-toggle" id="editToggle" title="Chế độ sửa (E)">✏️</button>
+<div class="edit-banner">CHẾ ĐỘ SỬA · click chữ để sửa · Ctrl+S lưu file · E thoát</div>
+
+<script>
+/* ===========================================
+   SLIDE CONTROLLER — nav + scale + edit
+   =========================================== */
+class Deck{
+  constructor(){
+    this.slides=[...document.querySelectorAll('.slide')];
+    this.stage=document.getElementById('deckStage');
+    this.i=0;
+    this.tot=this.slides.length;
+    document.getElementById('tot').textContent=this.tot;
+    // Auto-stamp per-slide counter "NN / TOT" in each .hdr .nums (tránh lệch khi thêm/bớt slide)
+    this.slides.forEach((s,k)=>{
+      const nums=s.querySelector('.hdr .nums');
+      if(nums) nums.textContent=String(k+1).padStart(2,'0')+' / '+this.tot;
+    });
+    this.scale();addEventListener('resize',()=>this.scale());
+    this.keys();this.touch();this.wheel();
+    this.show(0);
+  }
+  scale(){
+    const f=Math.min(innerWidth/1920,innerHeight/1080);
+    const x=(innerWidth-1920*f)/2, y=(innerHeight-1080*f)/2;
+    this.stage.style.transform=`translate(${x}px,${y}px) scale(${f})`;
+  }
+  show(n){
+    this.i=Math.max(0,Math.min(n,this.tot-1));
+    this.slides.forEach((s,k)=>{s.classList.toggle('active',k===this.i);s.classList.toggle('visible',k===this.i);});
+    document.getElementById('cur').textContent=this.i+1;
+    document.getElementById('progress').style.width=((this.i+1)/this.tot*100)+'%';
+  }
+  next(){this.show(this.i+1);} prev(){this.show(this.i-1);}
+  keys(){
+    addEventListener('keydown',e=>{
+      if(e.target.getAttribute&&e.target.getAttribute('contenteditable')==='true') return;
+      if(['ArrowRight','ArrowDown','PageDown',' '].includes(e.key)){e.preventDefault();this.next();}
+      else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();this.prev();}
+      else if(e.key==='Home')this.show(0);
+      else if(e.key==='End')this.show(this.tot-1);
+      else if(e.key==='f'||e.key==='F'){if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();}
+      else if(e.key==='o'||e.key==='O')this.overview();
+    });
+  }
+  touch(){
+    let x0=null,y0=null;
+    addEventListener('touchstart',e=>{x0=e.touches[0].clientX;y0=e.touches[0].clientY;},{passive:true});
+    addEventListener('touchend',e=>{
+      if(x0===null)return;const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
+      if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)){dx<0?this.next():this.prev();}
+      x0=null;
+    },{passive:true});
+  }
+  wheel(){
+    let lock=false;
+    addEventListener('wheel',e=>{
+      if(document.body.classList.contains('editing'))return;
+      if(lock)return;const d=e.deltaY||e.deltaX;
+      if(Math.abs(d)<25)return;lock=true;d>0?this.next():this.prev();
+      setTimeout(()=>lock=false,650);
+    },{passive:true});
+  }
+  overview(){ /* nhảy nhanh: bấm số đầu/cuối — giữ tối giản */ document.body.classList.toggle('ov'); }
+}
+const deck=new Deck();
+
+/* ===========================================
+   INLINE EDIT — hover góc trái / phím E
+   =========================================== */
+const editor={
+  isActive:false,
+  toggle(){
+    this.isActive=!this.isActive;
+    document.body.classList.toggle('editing',this.isActive);
+    const t=document.getElementById('editToggle');
+    t.classList.toggle('active',this.isActive);
+    document.querySelectorAll('.slide h1,.slide h2,.slide p,.slide td,.slide th,.slide li,.callout,.card .val,.card .note,.statement,.dsub').forEach(el=>{
+      el.setAttribute('contenteditable',this.isActive?'true':'false');
+    });
+  },
+  save(){
+    const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+    const b=new Blob([html],{type:'text/html'});const a=document.createElement('a');
+    a.href=URL.createObjectURL(b);a.download='presentation-deck.html';a.click();URL.revokeObjectURL(a.href);
+  }
+};
+const hz=document.querySelector('.edit-hotzone'),et=document.getElementById('editToggle');let ht=null;
+hz.addEventListener('mouseenter',()=>{clearTimeout(ht);et.classList.add('show');});
+hz.addEventListener('mouseleave',()=>{ht=setTimeout(()=>{if(!editor.isActive)et.classList.remove('show');},400);});
+et.addEventListener('mouseenter',()=>clearTimeout(ht));
+et.addEventListener('mouseleave',()=>{ht=setTimeout(()=>{if(!editor.isActive)et.classList.remove('show');},400);});
+hz.addEventListener('click',()=>editor.toggle());
+et.addEventListener('click',()=>editor.toggle());
+addEventListener('keydown',e=>{
+  if((e.key==='e'||e.key==='E')&&!(e.target.getAttribute&&e.target.getAttribute('contenteditable')==='true'))editor.toggle();
+  if((e.ctrlKey||e.metaKey)&&e.key==='s'&&editor.isActive){e.preventDefault();editor.save();}
+});
+</script>
+</body>
+</html>
